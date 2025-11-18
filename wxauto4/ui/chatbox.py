@@ -16,6 +16,7 @@ from .base import (
     BaseUISubWnd
 )
 from wxauto4.msgs.msg import parse_msg
+from wxauto4.ui_config import WxUI41Config
 
 import time
 import os
@@ -62,7 +63,7 @@ class ChatBox(BaseUISubWnd):
     
     def get_info(self):
         chat_info = {}
-        chat_info_control = self.control.GetParentControl().GroupControl(ClassName="mmui::ChatInfoView")
+        chat_info_control = self.control.GetParentControl().GroupControl(ClassName=WxUI41Config.CHAT_INFO_VIEW_CLS)
         aid_head = 'top_content_h_view.top_spacing_v_view.top_left_info_v_view.big_title_line_h_view.'
         v_view = "top_content_h_view.top_spacing_v_view.top_left_info_v_view"
         aids = {
@@ -87,7 +88,7 @@ class ChatBox(BaseUISubWnd):
                         chat_info['chat_name'] = cnc.Name
 
                 elif aid == 'chat_count':
-                    chat_info['group_member_count'] = int(re.findall('\d+', control.Name)[0])
+                    chat_info['group_member_count'] = int(re.findall(r'\d+', control.Name)[0])
                     chat_info['chat_type'] = 'group'
                 elif aid == 'company':
                     chat_info['chat_type'] = 'service'
@@ -101,8 +102,8 @@ class ChatBox(BaseUISubWnd):
             self.editbox.MiddleClick()
 
     def init(self):
-        self.msgbox = self.control.GroupControl(ClassName="mmui::MessageView").ListControl()
-        self.editbox = self.control.EditControl(ClassName="mmui::ChatInputField")
+        self.msgbox = self.control.GroupControl(ClassName=WxUI41Config.CHAT_MESSAGE_VIEW_CLS).ListControl()
+        self.editbox = self.control.EditControl(ClassName=WxUI41Config.CHAT_INPUT_FIELD_CLS)
         self.sendbtn = self.control.ButtonControl(Name=self._lang('发送(S)'))
         self.tools = self.control.ToolBarControl()
         self._empty = False
@@ -361,9 +362,9 @@ class AtEle:
         self.control = control
 
 class AtMenu(BaseUISubWnd):
-    _ui_cls_name: str = "mmui::XPopover"
+    _ui_cls_name: str = WxUI41Config.AT_MENU_CLS
     _ui_name: str = "Weixin"
-    _ui_automation_id = "MentionPopover"
+    _ui_automation_id = WxUI41Config.AT_MENU_AUTOMATION_ID
 
     def __init__(self, parent):
         self.root = parent.root

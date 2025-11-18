@@ -2,6 +2,7 @@ from wxauto4.utils.tools import (
     detect_message_direction
 )
 from wxauto4 import uia
+from wxauto4.ui_config import WxUI41Config
 from .mattr import (
     SystemMessage,
     FriendMessage,
@@ -80,7 +81,7 @@ def parse_msg_type(
         return getattr(msgtype, f'{attr}{classname_result}')(control, parent, additonal_attr)
     
     # 第二层：基于ClassName分类后的详细识别
-    if msg_classname == "mmui::ChatBubbleItemView":
+    if msg_classname == WxUI41Config.MSG_BUBBLE_ITEM_CLS:
         # Name前缀特征识别
         prefix_result = _classify_by_name_prefix(msg_text)
         if prefix_result:
@@ -93,7 +94,7 @@ def parse_msg_type(
         # 如果都不匹配，归类为其他消息
         return getattr(msgtype, f'{attr}OtherMessage')(control, parent, additonal_attr)
     
-    elif msg_classname == "mmui::ChatTextItemView":
+    elif msg_classname == WxUI41Config.MSG_TEXT_ITEM_CLS:
         # 第三层：引用消息处理
         if _is_quote_message(msg_text):
             return getattr(msgtype, f'{attr}QuoteMessage')(control, parent, additonal_attr)
@@ -105,8 +106,8 @@ def parse_msg_type(
 
 def _classify_by_classname(classname: str) -> str:
     classname_mapping = {
-        "mmui::ChatVoiceItemView": "VoiceMessage",
-        "mmui::ChatPersonalCardItemView": "PersonalCardMessage",
+        WxUI41Config.MSG_VOICE_ITEM_CLS: "VoiceMessage",
+        WxUI41Config.MSG_CARD_ITEM_CLS: "PersonalCardMessage",
     }
     return classname_mapping.get(classname, "")
 

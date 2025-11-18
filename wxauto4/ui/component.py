@@ -14,6 +14,7 @@ from wxauto4.utils.tools import (
 from .base import BaseUISubWnd
 from wxauto4.param import WxParam, WxResponse
 from wxauto4.logger import wxlog
+from wxauto4.ui_config import WxUI41Config
 from pathlib import Path
 from typing import (
     List,
@@ -25,8 +26,8 @@ import time
 import os
 
 class UpdateWindow(BaseUISubWnd):
-    _ui_cls_name: str = "mmui::XView"
-    _win_cls_name: str = "Qt51514QWindowIcon"
+    _ui_cls_name: str = WxUI41Config.UPDATE_WINDOW_CLS
+    _win_cls_name: str = WxUI41Config.WIN_CLS_NAME
     _win_name: str = "微信"
 
     def __init__(self):
@@ -41,15 +42,15 @@ class UpdateWindow(BaseUISubWnd):
 
     def ignore(self):
         ignore_btn = self.control.ButtonControl(
-            ClassName="mmui::XOutlineButton", 
+            ClassName=WxUI41Config.BUTTON_OUTLINE_CLS, 
             Name="忽略本次更新"
         )
         if ignore_btn.Exists(0):
             ignore_btn.Click()
 
 class Menu(BaseUISubWnd):
-    _ui_cls_name:str="mmui::XMenu"
-    _win_cls_name:str = "Qt51514QWindowToolSaveBits"
+    _ui_cls_name:str=WxUI41Config.MENU_CLS
+    _win_cls_name:str = WxUI41Config.MENU_WIN_CLS
     _win_name: str="Weixin"
 
     def __init__(self, parent, timeout=2):
@@ -97,9 +98,9 @@ class Menu(BaseUISubWnd):
         return WxResponse.failure(f'未找到选项：{item}')
 
 class SelectContactWnd(BaseUISubWnd):
-    _ui_cls_name:str="mmui::SessionPickerWindow"
+    _ui_cls_name:str=WxUI41Config.SESSION_PICKER_CLS
     _ui_name: str="微信发送给"
-    _win_cls_name:str = "Qt51514QWindowIcon"
+    _win_cls_name:str = WxUI41Config.WIN_CLS_NAME
     _win_name: str="微信发送给"
 
     def __init__(self, parent, timeout=2):
@@ -125,7 +126,7 @@ class SelectContactWnd(BaseUISubWnd):
     def search(self, keyword, interval=0.1):
         """搜索并选择，需完全匹配"""
         # SearchContactView = self.control.GroupControl(ClassName="mmui::SearchContactView")
-        search_control = self.control.EditControl(ClassName="mmui::XValidatorTextEdit")
+        search_control = self.control.EditControl(ClassName=WxUI41Config.EDIT_VALIDATOR_CLS)
         SetClipboardText(keyword)
         search_control.Click()
         search_control.SendKeys('{Ctrl}a')
@@ -159,7 +160,7 @@ class SelectContactWnd(BaseUISubWnd):
 
 
 class SearchNewFriendWnd(BaseUISubWnd):
-    _win_cls_name: str = 'Qt51514QWindowIcon'
+    _win_cls_name: str = WxUI41Config.WIN_CLS_NAME
     _win_name: str="添加朋友"
 
     def __init__(self):
@@ -171,11 +172,11 @@ class SearchNewFriendWnd(BaseUISubWnd):
         self.apply_btn = self.control.ButtonControl(
             AutomationId="fixed_height_v_view.content_v_view.ContactProfileBottomUi.add_friend_button",
             Name="添加到通讯录",
-            ClassName="mmui::XOutlineButton",
+            ClassName=WxUI41Config.BUTTON_OUTLINE_CLS,
             searchDepth=9
         )
-        self.search_edit = self.control.EditControl(ClassName="mmui::XValidatorTextEdit", Name="搜索")
-        self.search_btn = self.control.ButtonControl(ClassName="mmui::XOutlineButton", Name="搜索")
+        self.search_edit = self.control.EditControl(ClassName=WxUI41Config.EDIT_VALIDATOR_CLS, Name="搜索")
+        self.search_btn = self.control.ButtonControl(ClassName=WxUI41Config.BUTTON_OUTLINE_CLS, Name="搜索")
 
     def search(self, keyword):
         self.search_edit.SendKeys('{Ctrl}a')
@@ -192,7 +193,7 @@ class SearchNewFriendWnd(BaseUISubWnd):
 
 
 class WeChatImage(BaseUISubWnd):
-    _win_cls_name: str = 'Qt51514QWindowIcon'
+    _win_cls_name: str = WxUI41Config.WIN_CLS_NAME
     _win_name: str="预览"
 
     def __init__(self, parent):
@@ -203,12 +204,12 @@ class WeChatImage(BaseUISubWnd):
             self.init()
 
     def init(self):
-        toolbar_control = self.control.GroupControl(ClassName="mmui::PreviewToolbarView")
+        toolbar_control = self.control.GroupControl(ClassName=WxUI41Config.PREVIEW_TOOLBAR_CLS)
         self.tools = {
             btn.Name: btn for ele in toolbar_control.GetChildren()
             if (btn := ele.ButtonControl()).Exists(0)
         }
-        if self.control.WindowControl(ClassName="mmui::XPlayerControlView").Exists(0):
+        if self.control.WindowControl(ClassName=WxUI41Config.PLAYER_CONTROL_CLS).Exists(0):
             self.type = 'video'
         else:
             self.type = 'image'

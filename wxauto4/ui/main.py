@@ -11,6 +11,7 @@ from wxauto4.utils.win32 import (
 from wxauto4.param import WxParam, WxResponse, PROJECT_NAME
 from wxauto4.logger import wxlog
 from wxauto4 import uia
+from wxauto4.ui_config import WxUI41Config
 from typing import (
     Union, 
     List,
@@ -22,8 +23,8 @@ import re
 import sys
 
 class WeChatSubWnd(BaseUISubWnd):
-    _ui_cls_name: str = 'mmui::FramelessMainWindow'
-    _win_cls_name: str = 'Qt51514QWindowIcon'
+    _ui_cls_name: str = WxUI41Config.SUB_WINDOW_UI_CLS
+    _win_cls_name: str = WxUI41Config.WIN_CLS_NAME
     _chat_api: ChatBox = None
     nickname: str = ''
 
@@ -42,8 +43,8 @@ class WeChatSubWnd(BaseUISubWnd):
         self.control = uia.ControlFromHandle(hwnd)
         if self.control is not None:
             chatbox_control = self.control.\
-                GroupControl(ClassName="mmui::ChatMessagePage").\
-                CustomControl(ClassName="mmui::XSplitterView")
+                GroupControl(ClassName=WxUI41Config.CHAT_PAGE_CLS).\
+                CustomControl(ClassName=WxUI41Config.CHAT_SPLITTER_CLS)
             self._chat_api = ChatBox(chatbox_control, self)
             self.nickname = self.control.Name
 
@@ -127,8 +128,8 @@ class WeChatSubWnd(BaseUISubWnd):
     
 
 class WeChatMainWnd(WeChatSubWnd):
-    _ui_cls_name: str = 'mmui::MainWindow'
-    _win_cls_name: str = 'Qt51514QWindowIcon'
+    _ui_cls_name: str = WxUI41Config.MAIN_WINDOW_UI_CLS
+    _win_cls_name: str = WxUI41Config.WIN_CLS_NAME
     _ui_name: str = '微信'
 
     def __init__(self, nickname: str = None, hwnd: int = None):
@@ -139,7 +140,31 @@ class WeChatMainWnd(WeChatSubWnd):
         else:
             wxs = [i for i in GetAllWindows() if i[1] == self._win_cls_name]
             if len(wxs) == 0:
-                raise Exception('未找到已登录的微信主窗口')
+                # 尝试查找所有可能的窗口类名
+                possible_classes = [
+                    self._win_cls_name,  # 当前配置的类名
+                    'Qt51514QWindowIcon',  # Qt 5.15.14
+                    'Qt6QWindowIcon',  # Qt 6
+                ]
+                all_wxs = []
+                for cls in possible_classes:
+                    found = [i for i in GetAllWindows() if i[1] == cls]
+                    if found:
+                        all_wxs.extend(found)
+                        wxlog.debug(f"找到窗口类名: {cls}, 数量: {len(found)}")
+                
+                if len(all_wxs) == 0:
+                    error_msg = (
+                        f'未找到已登录的微信主窗口！\n'
+                        f'尝试的窗口类名: {", ".join(possible_classes)}\n'
+                        f'请运行 find_wechat_window.py 查找实际的窗口类名，'
+                        f'然后修改 wxauto4/ui_config.py 中的 WIN_CLS_NAME'
+                    )
+                    raise Exception(error_msg)
+                
+                # 使用找到的窗口
+                wxs = all_wxs
+            
             for index, (hwnd, clsname, winname) in enumerate(wxs):
                 self._setup_ui(hwnd)
                 if self.control.ClassName == self._ui_cls_name:
@@ -156,16 +181,23 @@ class WeChatMainWnd(WeChatSubWnd):
         self.control = uia.ControlFromHandle(hwnd)
         if self.control is not None:
             navigation_control = self.control.\
-                ToolBarControl(ClassName="mmui::MainTabBar", AutomationId='main_tabbar')
+                ToolBarControl(ClassName=WxUI41Config.NAVIGATION_BAR_CLS, AutomationId=WxUI41Config.NAVIGATION_BAR_AUTOMATION_ID)
             sessionbox_control = self.control.\
-                GroupControl(ClassName="mmui::ChatMasterView")
+                GroupControl(ClassName=WxUI41Config.SESSION_BOX_CLS)
             chatbox_control = self.control.\
-                GroupControl(ClassName="mmui::ChatMessagePage").\
-                CustomControl(ClassName="mmui::XSplitterView")
+                GroupControl(ClassName=WxUI41Config.CHAT_PAGE_CLS).\
+                CustomControl(ClassName=WxUI41Config.CHAT_SPLITTER_CLS)
             self._navigation_api = NavigationBox(navigation_control, self)
             self._session_api = SessionBox(sessionbox_control, self)
             self._chat_api = ChatBox(chatbox_control, self)
-            self.nickname = self.control.Name
+            
+            # 尝试从导航栏头像获取昵称
+            user_nickname = self._navigation_api.get_user_nickname()
+            if user_nickname:
+                self.nickname = user_nickname
+            else:
+                # 如果获取失败，使用窗口标题
+                self.nickname = self.control.Name
 
     def __repr__(self):
         return f'<{PROJECT_NAME} - {self.__class__.__name__} object("{self.nickname}")>'
@@ -176,7 +208,7 @@ class WeChatMainWnd(WeChatSubWnd):
     def _get_wx_dir(self):
         wxdir = os.path.dirname(self._get_wx_path())
         for d in os.listdir(wxdir):
-            if re.match('\d+\.\d+\.\d+\.\d+', d):
+            if re.match(r'\d+\.\d+\.\d+\.\d+', d):
                 return os.path.join(wxdir, d)
 
     def _get_chatbox(

@@ -215,6 +215,7 @@ class WeChat(Chat, Listener):
         self.SessionBox = self._api._session_api
         self.ChatBox = self._api._chat_api
         self.Moment = Moment(self)
+        # nickname 已经在 WeChatMainWnd 初始化时从导航栏头像获取了
         self.nickname = self._api.nickname
         self.listen = {}
         if start_listener:
@@ -288,6 +289,16 @@ class WeChat(Chat, Listener):
             
         """
         return self._api.switch_chat(who, exact, force, force_wait)
+    
+    def GetCurrentUserNickname(self) -> str:
+        """获取当前登录者的昵称
+        
+        昵称在初始化时已从导航栏头像获取，直接返回即可
+        
+        Returns:
+            str: 当前登录者的昵称
+        """
+        return self.nickname
     
     def GetSubWindow(self, nickname: str) -> 'Chat':
         """获取子窗口实例
