@@ -259,12 +259,43 @@ class BaseMessage(Message, ABC):
         # 3. 聊天信息
         try:
             chat_info = self.parent.ChatInfo()
-            info['chat_name'] = chat_info.get('chat_name') or chat_info.get('chat_remark') or getattr(self.parent, 'who', None) or '未知'
+            # 优先使用 chat_name，然后是 chat_remark
+            chat_name = chat_info.get('chat_name') or chat_info.get('chat_remark')
+            
+            # 如果 ChatInfo 获取失败，尝试从父窗口获取
+            if not chat_name:
+                # self.parent 是 ChatBox，self.parent.parent 可能是 WeChatSubWnd 或 WeChatMainWnd
+                parent_parent = getattr(self.parent, 'parent', None)
+                if parent_parent and hasattr(parent_parent, 'nickname'):
+                    chat_name = parent_parent.nickname
+            
+            # 如果还是获取不到，尝试使用 who（但 who 可能是输入框名称，不可靠）
+            if not chat_name:
+                who = getattr(self.parent, 'who', None)
+                # 如果 who 是"输入"或类似输入框提示文本，忽略它
+                if who and who not in ['输入', '请输入', '']:
+                    chat_name = who
+            
+            info['chat_name'] = chat_name or '未知'
             info['chat_type'] = chat_info.get('chat_type', 'unknown')
             info['is_group'] = chat_info.get('chat_type') == 'group'
             info['group_member_count'] = chat_info.get('group_member_count', 0)
-        except:
-            info['chat_name'] = getattr(self.parent, 'who', None) or str(self.parent) if hasattr(self.parent, '__str__') else '未知'
+        except Exception as e:
+            # 如果 ChatInfo 失败，尝试从父窗口获取
+            chat_name = None
+            try:
+                parent_parent = getattr(self.parent, 'parent', None)
+                if parent_parent and hasattr(parent_parent, 'nickname'):
+                    chat_name = parent_parent.nickname
+            except:
+                pass
+            
+            if not chat_name:
+                who = getattr(self.parent, 'who', None)
+                if who and who not in ['输入', '请输入', '']:
+                    chat_name = who
+            
+            info['chat_name'] = chat_name or '未知'
             info['chat_type'] = 'unknown'
             info['is_group'] = False
             info['group_member_count'] = 0
