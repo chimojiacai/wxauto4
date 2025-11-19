@@ -75,7 +75,19 @@ class WeChatSubWnd(BaseUISubWnd):
         return [win for win in wins if win.ClassName not in ignore_cls]
     
     def chat_info(self):
-        return self._chat_api.get_info()
+        """获取聊天窗口信息（已禁用，避免触发点击操作）
+        
+        注意：此方法已被禁用，因为会触发点击好友头像的操作。
+        请使用 self.nickname 获取聊天对象名称。
+        """
+        # 不再调用 get_info()，避免触发点击操作
+        # 只返回窗口标题信息
+        return {
+            'chat_name': self.nickname,
+            'chat_type': 'unknown',
+            'is_group': False,
+            'group_member_count': 0
+        }
     
     def send_msg(
             self, 

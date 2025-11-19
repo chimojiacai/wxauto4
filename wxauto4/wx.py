@@ -105,12 +105,22 @@ class Chat:
         self._api._show()
 
     def ChatInfo(self) -> Dict[str, str]:
-        """获取聊天窗口信息
+        """获取聊天窗口信息（已禁用，避免触发点击操作）
+        
+        注意：此方法已被禁用，因为会触发点击好友头像的操作。
+        请使用 self.who 获取聊天对象名称。
         
         Returns:
-            dict: 聊天窗口信息
+            dict: 聊天窗口信息（仅包含窗口标题）
         """
-        return self._api._chat_api.get_info()
+        # 不再调用 get_info()，避免触发点击操作
+        # 只返回窗口标题信息
+        return {
+            'chat_name': self.who,
+            'chat_type': 'unknown',
+            'is_group': False,
+            'group_member_count': 0
+        }
 
     
     @uilock
@@ -170,8 +180,10 @@ class Chat:
             List[Message]: 当前聊天窗口的新消息
         """
         if not hasattr(self, '_last_chat'):
-            self._last_chat = self.ChatInfo().get('chat_name')
-        if (_last_chat := self.ChatInfo().get('chat_name')) != self._last_chat:
+            # 使用窗口标题而不是 ChatInfo()，避免触发点击操作
+            self._last_chat = self.who
+        # 使用窗口标题而不是 ChatInfo()，避免触发点击操作
+        if (_last_chat := self.who) != self._last_chat:
             self._last_chat = _last_chat
             self._api._chat_api._update_used_msg_ids()
             return []

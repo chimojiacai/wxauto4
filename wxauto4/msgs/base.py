@@ -257,48 +257,30 @@ class BaseMessage(Message, ABC):
         info['direction_distance'] = getattr(self, 'distince', None)  # 距离值
         
         # 3. 聊天信息
+        # 完全依赖父窗口的 nickname（窗口标题），避免调用 ChatInfo() 可能触发的点击操作
+        chat_name = None
         try:
-            chat_info = self.parent.ChatInfo()
-            # 优先使用 chat_name，然后是 chat_remark
-            chat_name = chat_info.get('chat_name') or chat_info.get('chat_remark')
-            
-            # 如果 ChatInfo 获取失败，尝试从父窗口获取
-            if not chat_name:
-                # self.parent 是 ChatBox，self.parent.parent 可能是 WeChatSubWnd 或 WeChatMainWnd
-                parent_parent = getattr(self.parent, 'parent', None)
-                if parent_parent and hasattr(parent_parent, 'nickname'):
-                    chat_name = parent_parent.nickname
-            
-            # 如果还是获取不到，尝试使用 who（但 who 可能是输入框名称，不可靠）
-            if not chat_name:
-                who = getattr(self.parent, 'who', None)
-                # 如果 who 是"输入"或类似输入框提示文本，忽略它
-                if who and who not in ['输入', '请输入', '']:
-                    chat_name = who
-            
-            info['chat_name'] = chat_name or '未知'
-            info['chat_type'] = chat_info.get('chat_type', 'unknown')
-            info['is_group'] = chat_info.get('chat_type') == 'group'
-            info['group_member_count'] = chat_info.get('group_member_count', 0)
-        except Exception as e:
-            # 如果 ChatInfo 失败，尝试从父窗口获取
-            chat_name = None
-            try:
-                parent_parent = getattr(self.parent, 'parent', None)
-                if parent_parent and hasattr(parent_parent, 'nickname'):
-                    chat_name = parent_parent.nickname
-            except:
-                pass
-            
-            if not chat_name:
-                who = getattr(self.parent, 'who', None)
-                if who and who not in ['输入', '请输入', '']:
-                    chat_name = who
-            
-            info['chat_name'] = chat_name or '未知'
-            info['chat_type'] = 'unknown'
-            info['is_group'] = False
-            info['group_member_count'] = 0
+            # self.parent 是 ChatBox，self.parent.parent 可能是 WeChatSubWnd 或 WeChatMainWnd
+            parent_parent = getattr(self.parent, 'parent', None)
+            if parent_parent and hasattr(parent_parent, 'nickname'):
+                chat_name = parent_parent.nickname
+        except:
+            pass
+        
+        # 如果从父窗口获取失败，尝试使用 who（但 who 可能是输入框名称，不可靠）
+        if not chat_name:
+            who = getattr(self.parent, 'who', None)
+            # 如果 who 是"输入"或类似输入框提示文本，忽略它
+            if who and who not in ['输入', '请输入', '']:
+                chat_name = who
+        
+        info['chat_name'] = chat_name or '未知'
+        
+        # 不调用 ChatInfo()，避免触发点击操作
+        # 如果需要判断是否为群聊，可以通过其他方式（如窗口标题包含特定标识）
+        info['chat_type'] = 'unknown'
+        info['is_group'] = False
+        info['group_member_count'] = 0
         
         # 4. 发送者信息
         sender = '未知'
@@ -315,28 +297,29 @@ class BaseMessage(Message, ABC):
                 sender_remark = self.sender_remark
             
             # 如果是群聊且是好友发送的消息，尝试从消息控件中提取发送者
-            if info['is_group'] and info['attr'] == 'friend':
-                try:
-                    children = self.control.GetChildren()
-                    for child in children:
-                        child_name = getattr(child, 'Name', '')
-                        if child_name and child_name.strip():
-                            # 如果子控件名称包含换行符，可能是"发送者\n内容"格式
-                            if '\n' in child_name:
-                                parts = child_name.split('\n', 1)
-                                if len(parts) >= 2:
-                                    potential_sender = parts[0].strip()
-                                    if potential_sender and len(potential_sender) < 50:
-                                        sender = potential_sender
-                                        break
-                            # 或者检查是否有单独的发送者控件
-                            elif child.ControlTypeName in ['TextControl', 'ButtonControl']:
-                                if child_name and child_name != info['content'] and len(child_name) < 50:
-                                    if child_name not in info['content']:
-                                        sender = child_name
-                                        break
-                except:
-                    pass
+            # 注意：暂时禁用子控件访问，避免触发点击操作
+            # if info['is_group'] and info['attr'] == 'friend':
+            #     try:
+            #         children = self.control.GetChildren()
+            #         for child in children:
+            #             child_name = getattr(child, 'Name', '')
+            #             if child_name and child_name.strip():
+            #                 # 如果子控件名称包含换行符，可能是"发送者\n内容"格式
+            #                 if '\n' in child_name:
+            #                     parts = child_name.split('\n', 1)
+            #                     if len(parts) >= 2:
+            #                         potential_sender = parts[0].strip()
+            #                         if potential_sender and len(potential_sender) < 50:
+            #                             sender = potential_sender
+            #                             break
+            #                 # 或者检查是否有单独的发送者控件
+            #                 elif child.ControlTypeName in ['TextControl', 'ButtonControl']:
+            #                     if child_name and child_name != info['content'] and len(child_name) < 50:
+            #                         if child_name not in info['content']:
+            #                             sender = child_name
+            #                             break
+            #     except:
+            #         pass
         
         # 如果是自己发送的消息
         if info['attr'] == 'self':
@@ -347,52 +330,56 @@ class BaseMessage(Message, ABC):
             info['sender_remark'] = sender_remark
         
         # 5. 位置验证信息（用于调试方向检测）
+        # 注意：访问 msgbox 可能会触发某些操作，暂时禁用位置信息获取
+        # 如果需要调试位置信息，可以手动启用
         control_position_info = None
-        try:
-            rect = self.control.BoundingRectangle
-            if hasattr(self.parent, 'msgbox'):
-                try:
-                    msgbox_rect = self.parent.msgbox.BoundingRectangle
-                    msgbox_width = msgbox_rect.right - msgbox_rect.left
-                    msg_center_x = (rect.left + rect.right) / 2
-                    msgbox_center_x = (msgbox_rect.left + msgbox_rect.right) / 2
-                    position_ratio = (msg_center_x - msgbox_center_x) / (msgbox_width / 2) if msgbox_width > 0 else 0
-                    
-                    right_distance = msgbox_rect.right - rect.right
-                    left_distance = rect.left - msgbox_rect.left
-                    right_ratio = right_distance / msgbox_width if msgbox_width > 0 else 0
-                    left_ratio = left_distance / msgbox_width if msgbox_width > 0 else 0
-                    
-                    offset = msg_center_x - msgbox_center_x
-                    window_position_ratio = offset / (msgbox_width / 2) if msgbox_width > 0 else 0
-                    
-                    control_position_info = {
-                        'position_ratio': position_ratio,
-                        'right_ratio': right_ratio,
-                        'left_ratio': left_ratio,
-                        'msgbox_rect': {
-                            'left': msgbox_rect.left,
-                            'right': msgbox_rect.right,
-                            'width': msgbox_width
-                        },
-                        'message_rect': {
-                            'left': rect.left,
-                            'right': rect.right,
-                            'width': rect.width()
-                        },
-                        'window_position_ratio': window_position_ratio,
-                        'message_center_x': msg_center_x,
-                        'window_center_x': msgbox_center_x,
-                        'offset': offset
-                    }
-                except Exception as e:
-                    control_position_info = {'error': str(e)}
-        except Exception as e:
-            control_position_info = {'error': str(e)}
+        # 暂时禁用位置信息获取，避免触发点击操作
+        # try:
+        #     rect = self.control.BoundingRectangle
+        #     if hasattr(self.parent, 'msgbox'):
+        #         try:
+        #             msgbox_rect = self.parent.msgbox.BoundingRectangle
+        #             msgbox_width = msgbox_rect.right - msgbox_rect.left
+        #             msg_center_x = (rect.left + rect.right) / 2
+        #             msgbox_center_x = (msgbox_rect.left + msgbox_rect.right) / 2
+        #             position_ratio = (msg_center_x - msgbox_center_x) / (msgbox_width / 2) if msgbox_width > 0 else 0
+        #             
+        #             right_distance = msgbox_rect.right - rect.right
+        #             left_distance = rect.left - msgbox_rect.left
+        #             right_ratio = right_distance / msgbox_width if msgbox_width > 0 else 0
+        #             left_ratio = left_distance / msgbox_width if msgbox_width > 0 else 0
+        #             
+        #             offset = msg_center_x - msgbox_center_x
+        #             window_position_ratio = offset / (msgbox_width / 2) if msgbox_width > 0 else 0
+        #             
+        #             control_position_info = {
+        #                 'position_ratio': position_ratio,
+        #                 'right_ratio': right_ratio,
+        #                 'left_ratio': left_ratio,
+        #                 'msgbox_rect': {
+        #                     'left': msgbox_rect.left,
+        #                     'right': msgbox_rect.right,
+        #                     'width': msgbox_width
+        #                 },
+        #                 'message_rect': {
+        #                     'left': rect.left,
+        #                     'right': rect.right,
+        #                     'width': rect.width()
+        #                 },
+        #                 'window_position_ratio': window_position_ratio,
+        #                 'message_center_x': msg_center_x,
+        #                 'window_center_x': msgbox_center_x,
+        #                 'offset': offset
+        #             }
+        #         except Exception as e:
+        #             control_position_info = {'error': str(e)}
+        # except Exception as e:
+        #     control_position_info = {'error': str(e)}
         
         info['position_info'] = control_position_info
         
         # 6. 消息控件信息（用于调试）
+        # 注意：获取子控件信息可能会触发某些操作，暂时只获取基本信息
         control_info = None
         try:
             control_info = {
@@ -402,29 +389,31 @@ class BaseMessage(Message, ABC):
                 'name': str(getattr(self.control, 'Name', 'N/A'))[:100]
             }
             
-            # 子控件信息
-            try:
-                children = self.control.GetChildren()
-                control_info['children_count'] = len(children)
-                control_info['children'] = []
-                for i, child in enumerate(children[:5]):  # 只取前5个
-                    try:
-                        child_rect = child.BoundingRectangle
-                        control_info['children'].append({
-                            'index': i + 1,
-                            'class_name': getattr(child, 'ClassName', 'N/A'),
-                            'rect': {
-                                'left': child_rect.left,
-                                'right': child_rect.right,
-                                'width': child_rect.width()
-                            },
-                            'name': str(getattr(child, 'Name', ''))[:50]
-                        })
-                    except:
-                        pass
-            except:
-                control_info['children_count'] = 0
-                control_info['children'] = []
+            # 暂时禁用子控件信息获取，避免触发点击操作
+            # try:
+            #     children = self.control.GetChildren()
+            #     control_info['children_count'] = len(children)
+            #     control_info['children'] = []
+            #     for i, child in enumerate(children[:5]):  # 只取前5个
+            #         try:
+            #             child_rect = child.BoundingRectangle
+            #             control_info['children'].append({
+            #                 'index': i + 1,
+            #                 'class_name': getattr(child, 'ClassName', 'N/A'),
+            #                 'rect': {
+            #                     'left': child_rect.left,
+            #                     'right': child_rect.right,
+            #                     'width': child_rect.width()
+            #                 },
+            #                 'name': str(getattr(child, 'Name', ''))[:50]
+            #             })
+            #         except:
+            #             pass
+            # except:
+            #     control_info['children_count'] = 0
+            #     control_info['children'] = []
+            control_info['children_count'] = 0
+            control_info['children'] = []
         except:
             control_info = {'error': '无法获取控件信息'}
         
