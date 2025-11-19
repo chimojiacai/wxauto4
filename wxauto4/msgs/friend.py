@@ -56,6 +56,15 @@ class FriendVoiceMessage(FriendMessage, VoiceMessage):
         ):
         super().__init__(control, parent, additonal_attr)
 
+class FriendEmojiMessage(FriendMessage, EmojiMessage):
+    def __init__(
+            self, 
+            control: uia.Control, 
+            parent: "ChatBox",
+            additonal_attr: Dict[str, Any]={}
+        ):
+        super().__init__(control, parent, additonal_attr)
+
 class FriendOtherMessage(FriendMessage, OtherMessage):
     def __init__(
             self, 

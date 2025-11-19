@@ -253,16 +253,14 @@ class WeChatMainWnd(WeChatSubWnd):
                 return subwin
             
     def open_separate_window(self, keywords: str) -> WeChatSubWnd:
+        # 先检查是否已有子窗口
         if subwin := self.get_sub_wnd(keywords):
             wxlog.debug(f"{keywords} 获取到已存在的子窗口: {subwin}")
             return subwin
-        if nickname := self._session_api.switch_chat(keywords):
-            wxlog.debug(f"{keywords} 切换到聊天窗口: {nickname}")
-            if subwin := self.get_sub_wnd(nickname):
-                wxlog.debug(f"{nickname} 获取到已存在的子窗口: {subwin}")
-                return subwin
-            else:
-                keywords = nickname
+        
+        # 直接打开独立窗口（open_separate_window内部会调用switch_chat，避免重复搜索）
         if result := self._session_api.open_separate_window(keywords):
             find_nickname = result['data'].get('nickname', keywords)
             return WeChatSubWnd(find_nickname, self)
+        
+        return None

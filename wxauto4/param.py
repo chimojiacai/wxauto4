@@ -23,8 +23,8 @@ class WxParam:
     # 是否强制重新自动获取X偏移量，如果设置为True，则每次启动都会重新获取
     FORCE_MESSAGE_XBIAS: bool = False
 
-    # 监听消息时间间隔，单位秒
-    LISTEN_INTERVAL: int = 1
+    # 监听消息时间间隔，单位秒（优化为0.3秒以提高实时性）
+    LISTEN_INTERVAL: float = 0.3
 
     # 监听执行器线程池大小
     LISTENER_EXCUTOR_WORKERS: int = 4

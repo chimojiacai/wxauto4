@@ -225,6 +225,7 @@ class WeChat(Chat, Listener):
             wxlog.debug('Debug mode is on')
         
     def _get_listen_messages(self):
+        """获取监听消息（优化版：增强错误处理和稳定性）"""
         try:
             sys.stdout.flush()
         except:
@@ -233,16 +234,33 @@ class WeChat(Chat, Listener):
         for who in temp_listen:
             chat, callback = temp_listen.get(who, (None, None))
             try:
-                if chat is None or not chat._api.exists():
+                # 检查聊天窗口是否存在
+                if chat is None:
                     self.RemoveListenChat(who)
                     continue
-            except:
+                # 检查窗口是否仍然有效
+                if not chat._api.exists(0):
+                    self.RemoveListenChat(who)
+                    continue
+            except Exception as e:
+                # 如果检查失败，尝试移除该监听
+                try:
+                    self.RemoveListenChat(who)
+                except:
+                    pass
                 continue
-            with self._lock:
-                msgs = chat.GetNewMessage()
-                for msg in msgs:
-                    wxlog.debug(f"[{msg.attr}]获取到新消息：{who} - {msg.content}")
-                    self._excutor.submit(self._safe_callback, callback, msg, chat)
+            
+            # 获取新消息
+            try:
+                with self._lock:
+                    msgs = chat.GetNewMessage()
+                    for msg in msgs:
+                        wxlog.debug(f"[{msg.attr}]获取到新消息：{who} - {msg.content}")
+                        self._excutor.submit(self._safe_callback, callback, msg, chat)
+            except Exception as e:
+                # 获取消息失败，记录但不中断监听
+                wxlog.debug(f"获取 {who} 的新消息失败: {e}")
+                continue
 
     @property
     def path(self):
@@ -342,6 +360,24 @@ class WeChat(Chat, Listener):
             return WxResponse.failure('找不到聊天窗口')
         name = subwin.nickname
         chat = Chat(subwin)
+        # 初始化消息ID记录，但不读取历史消息（直接进入监听状态）
+        # 这样第一次调用 GetNewMessage 时不会返回历史消息
+        # chat._api 是 WeChatSubWnd，chat._api._chat_api 是 ChatBox
+        chatbox_id = chat._api._chat_api.id if hasattr(chat._api, '_chat_api') and chat._api._chat_api else None
+        if chatbox_id:
+            from wxauto4.ui.chatbox import USED_MSG_IDS, LAST_MSG_COUNT
+            if chatbox_id not in USED_MSG_IDS:
+                # 初始化但不读取历史消息：记录当前消息数量，但不记录消息ID
+                # 这样下次检查时，所有新消息都会被识别为新消息
+                try:
+                    msg_controls = chat._api._chat_api.msgbox.GetChildren()
+                    current_msg_count = len([c for c in msg_controls if c.ControlTypeName == 'ListItemControl'])
+                    LAST_MSG_COUNT[chatbox_id] = current_msg_count
+                    # 不初始化 USED_MSG_IDS，这样所有消息都会被当作新消息
+                    # 但设置一个空集合，避免后续逻辑错误
+                    USED_MSG_IDS[chatbox_id] = tuple()
+                except:
+                    pass
         self.listen[name] = (chat, callback)
         return chat
     

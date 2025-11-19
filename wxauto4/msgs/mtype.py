@@ -91,6 +91,17 @@ class FileMessage(BaseMessage):
         ):
         super().__init__(control, parent, additonal_attr)
 
+class EmojiMessage(BaseMessage):
+    type = 'emoji'
+    
+    def __init__(
+            self, 
+            control: uia.Control, 
+            parent: "ChatBox",
+            additonal_attr: Dict[str, Any]={}
+        ):
+        super().__init__(control, parent, additonal_attr)
+
 class OtherMessage(BaseMessage):
     type = 'other'
     

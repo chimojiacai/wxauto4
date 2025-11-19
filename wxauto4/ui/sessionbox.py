@@ -363,17 +363,38 @@ class SessionBox:
             return None
 
     def open_separate_window(self, name: str):
+        """打开独立窗口（优化版：增强稳定性和错误处理）"""
         wxlog.debug(f"打开独立窗口: {name}")
         realname = self.switch_chat(name)
         if not realname:
             return WxResponse.failure('未找到会话')
+        
         time.sleep(0.3)
-        while True:
-            session = [i for i in self.get_session() if uia.IsElementInWindow(self.session_list, i.control)][0]
-            if session.content.startswith(realname):
-                break
-        session.double_click()
-        return WxResponse.success(data={'nickname': realname})
+        
+        # 查找会话并双击打开独立窗口
+        try:
+            sessions = [i for i in self.get_session() if uia.IsElementInWindow(self.session_list, i.control)]
+            if not sessions:
+                return WxResponse.failure('未找到会话列表')
+            
+            # 查找匹配的会话
+            target_session = None
+            for session in sessions:
+                if session.content.startswith(realname):
+                    target_session = session
+                    break
+            
+            if not target_session:
+                return WxResponse.failure(f'未找到会话: {realname}')
+            
+            # 双击打开独立窗口
+            target_session.double_click()
+            time.sleep(0.5)  # 等待独立窗口打开
+            
+            return WxResponse.success(data={'nickname': realname})
+        except Exception as e:
+            wxlog.debug(f"打开独立窗口失败: {e}")
+            return WxResponse.failure(f'打开独立窗口失败: {e}')
 
 
     def go_top(self):

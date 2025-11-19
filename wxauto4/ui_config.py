@@ -49,6 +49,7 @@ class WxUI41Config:
     MSG_TEXT_ITEM_CLS = 'mmui::ChatTextItemView'
     MSG_VOICE_ITEM_CLS = 'mmui::ChatVoiceItemView'
     MSG_CARD_ITEM_CLS = 'mmui::ChatPersonalCardItemView'
+    MSG_REFER_ITEM_CLS = 'mmui::ChatBubbleReferItemView'  # 动画表情、引用消息等
     
     # 组件
     MENU_CLS = 'mmui::XMenu'

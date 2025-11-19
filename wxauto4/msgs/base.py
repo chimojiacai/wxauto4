@@ -163,7 +163,41 @@ class BaseMessage(Message, ABC):
         self.distince = additonal_attr.get('direction_distence', None)
         self.root = parent.root
         self.id = self.control.runtimeid
-        self.content = self.control.Name
+        
+        # 优化：对于图片等消息，优先从子控件中获取内容
+        # 消息控件可能包含多个子控件，需要找到正确的消息类型和内容
+        main_name = self.control.Name or ""
+        content_name = main_name
+        
+        # 检查子控件，找到真正的消息内容
+        # 优先级：图片 > 动画表情 > 其他特殊类型 > 文本
+        try:
+            children = control.GetChildren()
+            found_image = False
+            found_emoji = False
+            
+            for child in children:
+                child_name = child.Name or ""
+                child_classname = child.ClassName
+                
+                # 优先检查 ChatBubbleReferItemView（图片、动画表情等）
+                if child_classname == 'mmui::ChatBubbleReferItemView':
+                    if child_name == "图片":
+                        content_name = "图片"
+                        found_image = True
+                        break  # 找到图片，直接使用
+                    elif child_name == "动画表情":
+                        content_name = "动画表情"
+                        found_emoji = True
+                        # 继续检查是否有图片（图片优先级更高）
+                
+                # 如果已经找到图片，不再检查其他类型
+                if found_image:
+                    break
+        except:
+            pass
+        
+        self.content = content_name
         rect = self.control.BoundingRectangle
         self.hash_text = f'({rect.height()},{rect.width()}){self.content}'
         self.hash = md5(self.hash_text.encode()).hexdigest()

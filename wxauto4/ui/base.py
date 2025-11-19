@@ -4,6 +4,7 @@ from wxauto4.logger import wxlog
 from wxauto4.utils.lock import uilock
 from abc import ABC, abstractmethod
 import win32gui
+import ctypes
 from typing import Union
 import time
 
@@ -41,14 +42,12 @@ class BaseUIWnd(ABC):
                 rect = win32gui.GetWindowRect(self.HWND)
                 window_width = rect[2] - rect[0]
                 window_height = rect[3] - rect[1]
-                screen_width = win32gui.GetSystemMetrics(0)
-                screen_height = win32gui.GetSystemMetrics(1)
+                screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+                screen_height = ctypes.windll.user32.GetSystemMetrics(1)
                 x = (screen_width - window_width) // 2
                 y = (screen_height - window_height) // 2
                 win32gui.SetWindowPos(self.HWND, 0, x, y, 0, 0, 0x0001)  # SWP_NOSIZE
-        except Exception as e:
-            # 移动窗口失败不影响窗口显示
-            wxlog.debug(f"移动窗口到中央失败: {e}")
+        except:
             pass
 
     @property
