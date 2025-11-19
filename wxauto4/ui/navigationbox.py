@@ -50,11 +50,11 @@ class NavigationBox:
         try:
             # 唤起微信窗口到前台并居中
             self.parent._show()
-            time.sleep(0.3)
+            time.sleep(0.1)  # 减少等待时间：从0.3秒减少到0.1秒
             
             # 找到"微信"按钮并计算头像按钮位置
             chat_button = self.chat_icon
-            if not chat_button.Exists(0.5):
+            if not chat_button.Exists(0.3):  # 减少超时时间：从0.5秒减少到0.3秒
                 return ""
             
             rect = chat_button.BoundingRectangle
@@ -67,7 +67,7 @@ class NavigationBox:
             
             # 点击头像按钮
             uia.Click(avatar_x, avatar_y)
-            time.sleep(0.5)
+            time.sleep(0.3)  # 减少等待时间：从0.5秒减少到0.3秒
             
             # 从弹窗窗口中查找ContactHeadView控件
             nickname = ""

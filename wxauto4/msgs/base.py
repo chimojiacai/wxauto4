@@ -222,6 +222,188 @@ class BaseMessage(Message, ABC):
             return True
         return False
     
+    def get_info(self) -> Dict[str, Any]:
+        """获取消息的详细信息，包括消息ID、内容、发送者、聊天信息等
+        
+        Returns:
+            Dict[str, Any]: 包含消息详细信息的字典
+        """
+        from datetime import datetime
+        
+        info = {}
+        
+        # 1. 消息ID（优先使用hash）
+        if hasattr(self, 'hash') and self.hash:
+            info['msg_id'] = self.hash
+            info['msg_id_type'] = 'hash'
+        elif hasattr(self, 'hash_text') and self.hash_text:
+            info['msg_id'] = self.hash_text[:50] + '...' if len(self.hash_text) > 50 else self.hash_text
+            info['msg_id_type'] = 'hash_text'
+        elif hasattr(self, 'id') and self.id:
+            if isinstance(self.id, tuple):
+                info['msg_id'] = '-'.join(str(x) for x in self.id)
+            else:
+                info['msg_id'] = str(self.id)
+            info['msg_id_type'] = 'runtimeid'
+        else:
+            info['msg_id'] = '未知'
+            info['msg_id_type'] = 'unknown'
+        
+        # 2. 消息基本信息
+        info['content'] = getattr(self, 'content', '')
+        info['type'] = getattr(self, 'type', 'unknown')
+        info['attr'] = getattr(self, 'attr', 'unknown')  # 'self' 或 'friend' 或 'system'
+        info['direction'] = getattr(self, 'direction', None)  # 'left' 或 'right'
+        info['direction_distance'] = getattr(self, 'distince', None)  # 距离值
+        
+        # 3. 聊天信息
+        try:
+            chat_info = self.parent.ChatInfo()
+            info['chat_name'] = chat_info.get('chat_name') or chat_info.get('chat_remark') or getattr(self.parent, 'who', None) or '未知'
+            info['chat_type'] = chat_info.get('chat_type', 'unknown')
+            info['is_group'] = chat_info.get('chat_type') == 'group'
+            info['group_member_count'] = chat_info.get('group_member_count', 0)
+        except:
+            info['chat_name'] = getattr(self.parent, 'who', None) or str(self.parent) if hasattr(self.parent, '__str__') else '未知'
+            info['chat_type'] = 'unknown'
+            info['is_group'] = False
+            info['group_member_count'] = 0
+        
+        # 4. 发送者信息
+        sender = '未知'
+        sender_remark = None
+        
+        # 如果是单聊且是好友发送的消息，发送者=聊天对象
+        if not info['is_group'] and info['attr'] == 'friend':
+            sender = info['chat_name']
+        else:
+            # 尝试从消息对象获取发送者
+            if hasattr(self, 'sender'):
+                sender = self.sender
+            if hasattr(self, 'sender_remark'):
+                sender_remark = self.sender_remark
+            
+            # 如果是群聊且是好友发送的消息，尝试从消息控件中提取发送者
+            if info['is_group'] and info['attr'] == 'friend':
+                try:
+                    children = self.control.GetChildren()
+                    for child in children:
+                        child_name = getattr(child, 'Name', '')
+                        if child_name and child_name.strip():
+                            # 如果子控件名称包含换行符，可能是"发送者\n内容"格式
+                            if '\n' in child_name:
+                                parts = child_name.split('\n', 1)
+                                if len(parts) >= 2:
+                                    potential_sender = parts[0].strip()
+                                    if potential_sender and len(potential_sender) < 50:
+                                        sender = potential_sender
+                                        break
+                            # 或者检查是否有单独的发送者控件
+                            elif child.ControlTypeName in ['TextControl', 'ButtonControl']:
+                                if child_name and child_name != info['content'] and len(child_name) < 50:
+                                    if child_name not in info['content']:
+                                        sender = child_name
+                                        break
+                except:
+                    pass
+        
+        # 如果是自己发送的消息
+        if info['attr'] == 'self':
+            sender = '我'
+        
+        info['sender'] = sender
+        if sender_remark and sender_remark != sender:
+            info['sender_remark'] = sender_remark
+        
+        # 5. 位置验证信息（用于调试方向检测）
+        control_position_info = None
+        try:
+            rect = self.control.BoundingRectangle
+            if hasattr(self.parent, 'msgbox'):
+                try:
+                    msgbox_rect = self.parent.msgbox.BoundingRectangle
+                    msgbox_width = msgbox_rect.right - msgbox_rect.left
+                    msg_center_x = (rect.left + rect.right) / 2
+                    msgbox_center_x = (msgbox_rect.left + msgbox_rect.right) / 2
+                    position_ratio = (msg_center_x - msgbox_center_x) / (msgbox_width / 2) if msgbox_width > 0 else 0
+                    
+                    right_distance = msgbox_rect.right - rect.right
+                    left_distance = rect.left - msgbox_rect.left
+                    right_ratio = right_distance / msgbox_width if msgbox_width > 0 else 0
+                    left_ratio = left_distance / msgbox_width if msgbox_width > 0 else 0
+                    
+                    offset = msg_center_x - msgbox_center_x
+                    window_position_ratio = offset / (msgbox_width / 2) if msgbox_width > 0 else 0
+                    
+                    control_position_info = {
+                        'position_ratio': position_ratio,
+                        'right_ratio': right_ratio,
+                        'left_ratio': left_ratio,
+                        'msgbox_rect': {
+                            'left': msgbox_rect.left,
+                            'right': msgbox_rect.right,
+                            'width': msgbox_width
+                        },
+                        'message_rect': {
+                            'left': rect.left,
+                            'right': rect.right,
+                            'width': rect.width()
+                        },
+                        'window_position_ratio': window_position_ratio,
+                        'message_center_x': msg_center_x,
+                        'window_center_x': msgbox_center_x,
+                        'offset': offset
+                    }
+                except Exception as e:
+                    control_position_info = {'error': str(e)}
+        except Exception as e:
+            control_position_info = {'error': str(e)}
+        
+        info['position_info'] = control_position_info
+        
+        # 6. 消息控件信息（用于调试）
+        control_info = None
+        try:
+            control_info = {
+                'class_name': getattr(self.control, 'ClassName', 'N/A'),
+                'automation_id': getattr(self.control, 'AutomationId', 'N/A'),
+                'control_type_name': getattr(self.control, 'ControlTypeName', 'N/A'),
+                'name': str(getattr(self.control, 'Name', 'N/A'))[:100]
+            }
+            
+            # 子控件信息
+            try:
+                children = self.control.GetChildren()
+                control_info['children_count'] = len(children)
+                control_info['children'] = []
+                for i, child in enumerate(children[:5]):  # 只取前5个
+                    try:
+                        child_rect = child.BoundingRectangle
+                        control_info['children'].append({
+                            'index': i + 1,
+                            'class_name': getattr(child, 'ClassName', 'N/A'),
+                            'rect': {
+                                'left': child_rect.left,
+                                'right': child_rect.right,
+                                'width': child_rect.width()
+                            },
+                            'name': str(getattr(child, 'Name', ''))[:50]
+                        })
+                    except:
+                        pass
+            except:
+                control_info['children_count'] = 0
+                control_info['children'] = []
+        except:
+            control_info = {'error': '无法获取控件信息'}
+        
+        info['control_info'] = control_info
+        
+        # 7. 接收时间
+        info['receive_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        return info
+    
 
 
 class HumanMessage(BaseMessage, ABC):

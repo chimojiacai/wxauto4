@@ -32,7 +32,7 @@ class WeChatSubWnd(BaseUISubWnd):
             self, 
             key: Union[str, int], 
             parent: 'WeChatMainWnd', 
-            timeout: int = 3
+            timeout: int = 1  # 减少默认超时时间：从3秒减少到1秒
         ):
         self.root = self
         self.parent = parent
@@ -236,31 +236,72 @@ class WeChatMainWnd(WeChatSubWnd):
         return self._session_api.switch_chat(keywords, exact, force, force_wait)
         
     def get_all_sub_wnds(self):
+        """获取所有子窗口，增强错误处理"""
         sub_wxs = GetAllWindows(classname=WeChatSubWnd._win_cls_name)
-        return [
-            sub_win 
-            for i in sub_wxs 
-            if (
-                uia.ControlFromHandle(i[0]).ClassName == WeChatSubWnd._ui_cls_name
-                and (sub_win:= WeChatSubWnd(i[0], self)).pid == self.pid
-            )
-        ]
+        result = []
+        for i in sub_wxs:
+            try:
+                control = uia.ControlFromHandle(i[0])
+                if control.ClassName == WeChatSubWnd._ui_cls_name:
+                    sub_win = WeChatSubWnd(i[0], self)
+                    if sub_win.pid == self.pid:
+                        result.append(sub_win)
+            except Exception as e:
+                # 如果某个窗口无法访问，跳过它
+                wxlog.debug(f"get_all_sub_wnds: 跳过无法访问的窗口 {i[0]}: {e}")
+                continue
+        return result
     
     def get_sub_wnd(self, who: str):
+        """获取子窗口，支持精确匹配和模糊匹配"""
         subwins = self.get_all_sub_wnds()
+        if not subwins:
+            wxlog.debug(f"get_sub_wnd: 未找到任何子窗口，搜索关键词: {who}")
+            return None
+        
+        wxlog.debug(f"get_sub_wnd: 找到 {len(subwins)} 个子窗口，搜索关键词: {who}")
+        for subwin in subwins:
+            wxlog.debug(f"get_sub_wnd: 检查子窗口昵称: {subwin.nickname}")
+        
+        # 先尝试精确匹配
         for subwin in subwins:
             if subwin.nickname == who:
+                wxlog.debug(f"get_sub_wnd: 精确匹配成功: {subwin.nickname} == {who}")
                 return subwin
+        
+        # 如果精确匹配失败，尝试模糊匹配（支持部分匹配）
+        for subwin in subwins:
+            if who in subwin.nickname or subwin.nickname.startswith(who):
+                wxlog.debug(f"get_sub_wnd: 模糊匹配成功: {who} in {subwin.nickname}")
+                return subwin
+        
+        # 反向匹配：如果子窗口昵称在搜索关键词中
+        for subwin in subwins:
+            if subwin.nickname in who:
+                wxlog.debug(f"get_sub_wnd: 反向匹配成功: {subwin.nickname} in {who}")
+                return subwin
+        
+        wxlog.debug(f"get_sub_wnd: 未找到匹配的子窗口，搜索关键词: {who}")
+        return None
             
     def open_separate_window(self, keywords: str) -> WeChatSubWnd:
-        # 先检查是否已有子窗口
-        if subwin := self.get_sub_wnd(keywords):
-            wxlog.debug(f"{keywords} 获取到已存在的子窗口: {subwin}")
+        """打开独立窗口，如果已存在则直接返回，避免重复搜索和拖出"""
+        wxlog.debug(f"open_separate_window: 开始查找独立窗口，关键词: {keywords}")
+        
+        # 先检查是否已有子窗口（支持模糊匹配）
+        subwin = self.get_sub_wnd(keywords)
+        if subwin:
+            wxlog.debug(f"open_separate_window: 找到已存在的子窗口: {subwin.nickname}，跳过搜索和拖出操作")
             return subwin
         
-        # 直接打开独立窗口（open_separate_window内部会调用switch_chat，避免重复搜索）
+        wxlog.debug(f"open_separate_window: 未找到已存在的子窗口，开始搜索和拖出操作，关键词: {keywords}")
+        
+        # 如果没有找到已存在的子窗口，才执行搜索和拖出操作
+        # open_separate_window内部会调用switch_chat，避免重复搜索
         if result := self._session_api.open_separate_window(keywords):
             find_nickname = result['data'].get('nickname', keywords)
+            wxlog.debug(f"open_separate_window: 成功打开独立窗口: {find_nickname}")
             return WeChatSubWnd(find_nickname, self)
         
+        wxlog.debug(f"open_separate_window: 打开独立窗口失败，关键词: {keywords}")
         return None

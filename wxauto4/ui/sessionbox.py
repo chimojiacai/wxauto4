@@ -332,7 +332,7 @@ class SessionBox:
             
             try:
                 selected['item'].Click()
-                time.sleep(0.5)  # 等待点击生效和窗口切换
+                time.sleep(0.2)  # 减少等待时间：等待点击生效和窗口切换
                 # 使用更可靠的方式验证：检查输入框的名称（who属性）
                 # 这比get_info()更可靠，因为输入框加载更快
                 try:
@@ -343,7 +343,7 @@ class SessionBox:
                         wxlog.debug(f"当前聊天窗口: {current_who}, 目标: {selected['text']}")
                 except Exception as e:
                     wxlog.debug(f"验证聊天窗口时出错（不影响继续执行）: {e}")
-                time.sleep(0.2)  # 额外等待确保窗口完全加载
+                # 移除额外等待，让调用方决定是否需要等待
                 return selected['text']
             except Exception as e:
                 wxlog.debug(f"点击搜索结果项失败: {e}")
@@ -363,13 +363,13 @@ class SessionBox:
             return None
 
     def open_separate_window(self, name: str):
-        """打开独立窗口（优化版：增强稳定性和错误处理）"""
+        """打开独立窗口（优化版：增强稳定性和错误处理，减少延迟）"""
         wxlog.debug(f"打开独立窗口: {name}")
         realname = self.switch_chat(name)
         if not realname:
             return WxResponse.failure('未找到会话')
         
-        time.sleep(0.3)
+        time.sleep(0.1)  # 减少等待时间：从0.3秒减少到0.1秒
         
         # 查找会话并双击打开独立窗口
         try:
@@ -389,7 +389,7 @@ class SessionBox:
             
             # 双击打开独立窗口
             target_session.double_click()
-            time.sleep(0.5)  # 等待独立窗口打开
+            time.sleep(0.2)  # 减少等待时间：从0.5秒减少到0.2秒，独立窗口打开通常很快
             
             return WxResponse.success(data={'nickname': realname})
         except Exception as e:

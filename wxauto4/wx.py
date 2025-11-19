@@ -354,7 +354,10 @@ class WeChat(Chat, Listener):
             wxlog.debug('检测到未开启监听器，开启监听器')
             self._listener_start()
         if nickname in self.listen:
-            return WxResponse.failure('该聊天已监听')
+            wxlog.debug(f"AddListenChat: {nickname} 已在监听列表中，直接返回")
+            return self.listen[nickname][0]  # 返回已存在的Chat对象
+        
+        wxlog.debug(f"AddListenChat: 开始查找或创建独立窗口: {nickname}")
         subwin = self._api.open_separate_window(nickname)
         if subwin is None:
             return WxResponse.failure('找不到聊天窗口')

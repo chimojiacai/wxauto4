@@ -133,7 +133,7 @@ def delete_update_files():
 def detect_message_direction(
     image_path: str,
     avatar_height_ratio: float = 0.8,
-    tolerance: int = 0,
+    tolerance: int = 5,  # 增加容忍度，从0改为5，提高检测准确性
 ) -> tuple[str, float]:
     """通过截图判断消息气泡的方向。
 
@@ -160,33 +160,63 @@ def detect_message_direction(
     pixels = img.load()  # 获取像素访问对象
 
     def is_uniform_column(x: int) -> bool:
-        base = pixels[x, y0]  # 以 band 顶部像素作为参考
-        for y in range(y0, y1):
-            r, g, b = pixels[x, y]
-            if (abs(r - base[0]) > tolerance or
-                abs(g - base[1]) > tolerance or
-                abs(b - base[2]) > tolerance):
+        # 改进：使用多个采样点而不是只用一个参考点
+        sample_points = [y0, (y0 + y1) // 2, y1 - 1]
+        colors = [pixels[x, y] for y in sample_points]
+        # 检查这些采样点的颜色是否一致
+        base = colors[0]
+        for color in colors[1:]:
+            if (abs(color[0] - base[0]) > tolerance or
+                abs(color[1] - base[1]) > tolerance or
+                abs(color[2] - base[2]) > tolerance):
                 return False
         return True
 
-    # 从左边扫描
+    # 从左边扫描（跳过前5%的列，避免边缘干扰）
+    left_start = max(0, int(w * 0.05))
     left_idx = math.inf
-    for x in range(w):
+    for x in range(left_start, w):
         if not is_uniform_column(x):
             left_idx = x
             break
 
-    # 从右边扫描
+    # 从右边扫描（跳过最后5%的列，避免边缘干扰）
+    right_start = max(0, int(w * 0.95))
     right_idx = math.inf
-    for offset, x in enumerate(range(w - 1, -1, -1)):
+    for offset, x in enumerate(range(w - 1, right_start - 1, -1)):
         if not is_uniform_column(x):
             right_idx = offset  # 距右边界的列数
             break
 
-    # print(f"left_idx: {left_idx}, right_idx: {right_idx}")
+    # 改进判断逻辑：如果距离差异很小，使用更严格的判断
+    # 如果 left_idx 和 right_idx 都很小，说明消息气泡在中间，需要更仔细判断
     if left_idx == math.inf and right_idx == math.inf:
         # 都没找到变化列，兜底
         return 'right', math.inf
+    
+    # 如果两个距离都很小（<50），说明可能是误判，需要更严格的判断
+    if left_idx < 50 and right_idx < 50:
+        # 选择距离更小的那个方向（更靠近边缘）
+        if left_idx < right_idx:
+            return 'left', float(left_idx)
+        else:
+            return 'right', float(right_idx)
+    
+    # 正常判断：选择距离更小的方向
+    # 注意：left_idx 是从左边扫描的距离，right_idx 是从右边扫描的距离
+    # 如果 left_idx 很大（>200），说明从左边扫描很远才找到，气泡在右侧（自己发送）
+    # 如果 right_idx 很大（>200），说明从右边扫描很远才找到，气泡在左侧（好友发送）
+    # 如果两者都很大（>200），说明气泡在中间，需要更仔细判断
+    
+    # 如果两者都很大（>200），可能是检测不准确，使用更宽松的判断
+    if left_idx > 200 and right_idx > 200:
+        # 选择距离更小的那个方向
+        if left_idx < right_idx:
+            return 'left', float(left_idx)
+        else:
+            return 'right', float(right_idx)
+    
+    # 正常判断：选择距离更小的方向
     if left_idx <= right_idx:
         return 'left', float(left_idx)
     return 'right', float(right_idx)

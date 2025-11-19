@@ -28,13 +28,24 @@ class BaseUIWnd(ABC):
     def _show(self):
         if not hasattr(self, 'HWND'):
             self.HWND = self.control.GetTopLevelControl().NativeWindowHandle
+        
+        # 优化：检查窗口是否已经在前台，如果是就不需要重复操作
+        try:
+            from wxauto4.utils.win32 import is_window_visible
+            foreground_hwnd = win32gui.GetForegroundWindow()
+            # 如果窗口已经在前台且可见，跳过显示操作
+            if foreground_hwnd == self.HWND and is_window_visible(self.HWND):
+                return
+        except:
+            pass
+        
         win32gui.ShowWindow(self.HWND, 1)
         win32gui.SetWindowPos(self.HWND, -1, 0, 0, 0, 0, 3)
         win32gui.SetWindowPos(self.HWND, -2, 0, 0, 0, 0, 3)
         self.control.Show()
-        # 将窗口移到屏幕中央（在窗口显示后）
+        # 将窗口移到屏幕中央（在窗口显示后，减少等待时间）
         try:
-            time.sleep(0.1)  # 等待窗口完全显示
+            # 移除等待，直接尝试移动窗口（窗口显示通常是即时的）
             if hasattr(self.control, 'MoveToCenter') and self.control.IsTopLevel():
                 self.control.MoveToCenter()
             else:

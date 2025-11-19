@@ -195,8 +195,17 @@ class ChatBox(BaseUISubWnd):
         return []
 
     def get_new_msgs(self):
-        """获取新消息（优化版：优先检查消息数量，只检查最后几条消息）"""
-        if not self.msgbox.Exists(0):
+        """获取新消息（优化版：优先检查消息数量，只检查最后几条消息）
+        
+        注意：此方法在监听模式下会被频繁调用，应避免触发窗口激活操作
+        """
+        # 优化：使用Exists(0)快速检查，不等待，避免触发窗口激活
+        # Exists(0) 不会触发窗口激活，只是检查控件是否存在
+        try:
+            if not self.msgbox.Exists(0):
+                return []
+        except:
+            # 如果检查失败，直接返回空列表，避免后续操作触发窗口激活
             return []
         
         # 快速检查：先获取消息数量（不获取所有ID，提高性能）
