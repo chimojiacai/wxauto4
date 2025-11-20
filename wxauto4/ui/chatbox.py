@@ -11,7 +11,6 @@ from wxauto4.utils.win32 import (
 from wxauto4.ui.component import (
     Menu
 )
-from wxauto4.logger import wxlog
 from .base import (
     BaseUISubWnd
 )
@@ -107,12 +106,17 @@ class ChatBox(BaseUISubWnd):
         self.sendbtn = self.control.ButtonControl(Name=self._lang('发送(S)'))
         self.tools = self.control.ToolBarControl()
         self._empty = False
-        # self._now_chat_info = self.get_info()
-        # self.id = self.msgbox.runtimeid
         if (cid := self.id) and cid not in USED_MSG_IDS:
-            # print("init chatbox", cid)
-            USED_MSG_IDS[self.id] = tuple((i.runtimeid for i in self.msgbox.GetChildren()))
-            if not USED_MSG_IDS[cid]:
+            try:
+                msg_controls = self.msgbox.GetChildren()
+                msg_count = len([c for c in msg_controls if c.ControlTypeName == 'ListItemControl'])
+                LAST_MSG_COUNT[cid] = msg_count
+            except:
+                pass
+            try:
+                if not self.msgbox.GetChildren():
+                    self._empty = True
+            except:
                 self._empty = True
 
     def clear_edit(self):
@@ -195,7 +199,12 @@ class ChatBox(BaseUISubWnd):
         return []
 
     def get_new_msgs(self):
-        """获取新消息（优化版：优先检查消息数量，只检查最后几条消息）
+        """获取新消息（优化版：基于窗口状态/布局变化检测）
+        
+        核心思路：
+        1. 启动监听时，记录当前窗口状态（所有消息ID）
+        2. 后续检查时，比较当前状态和已记录状态
+        3. 只有当状态变化时（有新消息），才返回新消息
         
         注意：此方法在监听模式下会被频繁调用，应避免触发窗口激活操作
         """
@@ -208,9 +217,11 @@ class ChatBox(BaseUISubWnd):
             # 如果检查失败，直接返回空列表，避免后续操作触发窗口激活
             return []
         
-        # 快速检查：先获取消息数量（不获取所有ID，提高性能）
+        # 快速检查：先获取消息控件（只获取 ListItemControl 类型的控件）
         try:
-            msg_controls = self.msgbox.GetChildren()
+            all_controls = self.msgbox.GetChildren()
+            # 只获取 ListItemControl 类型的控件（真正的消息控件）
+            msg_controls = [c for c in all_controls if c.ControlTypeName == 'ListItemControl']
             current_msg_count = len(msg_controls)
         except:
             return []
@@ -218,61 +229,43 @@ class ChatBox(BaseUISubWnd):
         if current_msg_count == 0:
             return []
         
+        # 获取已记录的消息ID列表（窗口状态）
+        current_used_ids = self.used_msg_ids or tuple()
+        
         # 获取上次记录的消息数量
         last_msg_count = LAST_MSG_COUNT.get(self.id, 0)
-        
-        # 确保used_msg_ids不为None
-        current_used_ids = self.used_msg_ids or tuple()
         
         if self._empty and current_used_ids:
             self._empty = False
         
-        # 如果没有历史消息id，初始化（但不返回历史消息，直接进入监听状态）
+        # 启动监听时的初始化：如果状态还没记录，记录当前窗口状态（所有消息ID），但不返回历史消息
         if not current_used_ids:
             if not self._empty:
-                # 初始化时只记录当前消息数量，不记录消息ID
-                # 这样所有后续消息都会被识别为新消息（用于监听场景）
                 try:
+                    all_msg_ids = tuple((i.runtimeid for i in msg_controls))
+                    USED_MSG_IDS[self.id] = all_msg_ids[-100:] if len(all_msg_ids) > 100 else all_msg_ids
                     LAST_MSG_COUNT[self.id] = current_msg_count
-                    # 不初始化 USED_MSG_IDS，保持为空，这样所有消息都会被当作新消息
                 except:
                     pass
-                return []
+            return []
         
-        # 关键优化：优先检查消息数量变化（快速检测）
+        # 比较当前窗口状态和已记录的状态，如果状态变化则返回新消息
         msg_count_increased = current_msg_count > last_msg_count
         
         if msg_count_increased:
-            # 消息数量增加了，计算新消息数量
             new_msg_count = current_msg_count - last_msg_count
-            
-            # 优化：只获取最后N+10条消息的ID（N是新消息数量，+10是为了容错）
-            # 这样可以避免遍历所有消息，大幅提高性能
             check_count = min(new_msg_count + 10, current_msg_count)
             try:
                 recent_controls = msg_controls[-check_count:] if check_count < len(msg_controls) else msg_controls
-                now_msg_ids = tuple((i.runtimeid for i in recent_controls))
+                recent_msg_ids = tuple((i.runtimeid for i in recent_controls))
             except:
                 return []
             
-            # 取最后N条消息作为候选新消息
-            candidate_new_ids = now_msg_ids[-new_msg_count:] if len(now_msg_ids) >= new_msg_count else now_msg_ids
-            
-            # 验证这些ID确实是新的（排除可能的ID重用情况）
+            candidate_new_ids = recent_msg_ids[-new_msg_count:] if len(recent_msg_ids) >= new_msg_count else recent_msg_ids
             used_msg_ids_set = set(current_used_ids)
-            confirmed_new_ids = []
-            
-            for msg_id in candidate_new_ids:
-                if msg_id not in used_msg_ids_set:
-                    confirmed_new_ids.append(msg_id)
-                # 即使ID重复，如果消息数量确实增加了，也要包含这条消息
-                # 这是处理快速重复消息的关键逻辑
-                elif msg_count_increased and len(confirmed_new_ids) < new_msg_count:
-                    # 对于疑似重复ID的情况，仍然当作新消息处理
-                    confirmed_new_ids.append(msg_id)
+            confirmed_new_ids = [msg_id for msg_id in candidate_new_ids if msg_id not in used_msg_ids_set]
             
             if confirmed_new_ids:
-                # 更新记录：只保留最后100条消息的ID
                 try:
                     all_msg_ids = tuple((i.runtimeid for i in msg_controls))
                     USED_MSG_IDS[self.id] = all_msg_ids[-100:] if len(all_msg_ids) > 100 else all_msg_ids
@@ -280,18 +273,10 @@ class ChatBox(BaseUISubWnd):
                 except:
                     pass
                 
-                # 根据新消息id获取对应的控件
                 new_controls = [i for i in recent_controls if i.runtimeid in confirmed_new_ids]
-                
-                return [
-                        parse_msg(msg_control, self) 
-                        for msg_control 
-                        in new_controls
-                        if msg_control.ControlTypeName == 'ListItemControl'
-                    ]
+                return [parse_msg(msg_control, self) for msg_control in new_controls]
         
-        # 如果消息数量没有增加，但可能有ID变化（处理消息刷新的情况）
-        # 优化：只检查最后20条消息，避免全量检查
+        # 如果消息数量没变，检查最后20条消息是否有ID变化
         check_count = min(20, current_msg_count)
         try:
             recent_controls = msg_controls[-check_count:] if check_count < len(msg_controls) else msg_controls
@@ -303,7 +288,6 @@ class ChatBox(BaseUISubWnd):
         new_ids = [msg_id for msg_id in recent_msg_ids if msg_id not in used_msg_ids_set]
         
         if new_ids:
-            # 更新记录
             try:
                 all_msg_ids = tuple((i.runtimeid for i in msg_controls))
                 USED_MSG_IDS[self.id] = all_msg_ids[-100:] if len(all_msg_ids) > 100 else all_msg_ids
@@ -311,15 +295,8 @@ class ChatBox(BaseUISubWnd):
             except:
                 pass
             
-            # 根据新消息id获取对应的控件
             new_controls = [i for i in recent_controls if i.runtimeid in new_ids]
-            
-            return [
-                    parse_msg(msg_control, self)
-                    for msg_control
-                    in new_controls
-                    if msg_control.ControlTypeName == 'ListItemControl'
-                ]
+            return [parse_msg(msg_control, self) for msg_control in new_controls]
 
         return []
 

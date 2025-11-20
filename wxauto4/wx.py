@@ -363,36 +363,28 @@ class WeChat(Chat, Listener):
             callback (Callable[['Message', Chat], None]): 回调函数，参数为(Message对象, Chat对象)，返回值为None
         """
         if not hasattr(self, '_listener_is_listening') or not self._listener_is_listening:
-            wxlog.debug('检测到未开启监听器，开启监听器')
             self._listener_start()
         if nickname in self.listen:
-            wxlog.debug(f"AddListenChat: {nickname} 已在监听列表中，直接返回")
-            return self.listen[nickname][0]  # 返回已存在的Chat对象
+            return self.listen[nickname][0]
         
-        wxlog.debug(f"AddListenChat: 开始查找或创建独立窗口: {nickname}")
         subwin = self._api.open_separate_window(nickname)
         if subwin is None:
             return WxResponse.failure('找不到聊天窗口')
         name = subwin.nickname
         chat = Chat(subwin)
-        # 初始化消息ID记录，但不读取历史消息（直接进入监听状态）
-        # 这样第一次调用 GetNewMessage 时不会返回历史消息
-        # chat._api 是 WeChatSubWnd，chat._api._chat_api 是 ChatBox
         chatbox_id = chat._api._chat_api.id if hasattr(chat._api, '_chat_api') and chat._api._chat_api else None
         if chatbox_id:
             from wxauto4.ui.chatbox import USED_MSG_IDS, LAST_MSG_COUNT
-            if chatbox_id not in USED_MSG_IDS:
-                # 初始化但不读取历史消息：记录当前消息数量，但不记录消息ID
-                # 这样下次检查时，所有新消息都会被识别为新消息
-                try:
-                    msg_controls = chat._api._chat_api.msgbox.GetChildren()
-                    current_msg_count = len([c for c in msg_controls if c.ControlTypeName == 'ListItemControl'])
-                    LAST_MSG_COUNT[chatbox_id] = current_msg_count
-                    # 不初始化 USED_MSG_IDS，这样所有消息都会被当作新消息
-                    # 但设置一个空集合，避免后续逻辑错误
-                    USED_MSG_IDS[chatbox_id] = tuple()
-                except:
-                    pass
+            try:
+                msg_controls = chat._api._chat_api.msgbox.GetChildren()
+                msg_controls = [c for c in msg_controls if c.ControlTypeName == 'ListItemControl']
+                current_msg_count = len(msg_controls)
+                all_msg_ids = tuple((i.runtimeid for i in msg_controls))
+                USED_MSG_IDS[chatbox_id] = all_msg_ids[-100:] if len(all_msg_ids) > 100 else all_msg_ids
+                LAST_MSG_COUNT[chatbox_id] = current_msg_count
+            except:
+                USED_MSG_IDS[chatbox_id] = tuple()
+                LAST_MSG_COUNT[chatbox_id] = 0
         self.listen[name] = (chat, callback)
         return chat
     
